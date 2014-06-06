@@ -31,7 +31,7 @@ typedef struct datum {
 	int   dsize;
 } datum;
 
-GDBM_FILE gdbm_open(const char *NAME, int BLOCK_SIZE, int FLAGS, int MODE, void (*fatal_func)(const char *));
+GDBM_FILE gdbm_open(const char *name, int block_size, int flags, int mode, void (*fatal_func)(const char *));
 void      gdbm_close(GDBM_FILE dbf);
 int       gdbm_store(GDBM_FILE dbf, datum key, datum content, int flag);
 datum     gdbm_fetch(GDBM_FILE dbf, datum key);
@@ -96,9 +96,9 @@ local setopt_args = {
 
 -- module functions
 
-M.open = function(name, mode, flags, blksize, final)
+M.open = function(name, mode, blksize, flags, final)
     mode = mode or M.READER
-    local db = C.gdbm_open(name, blksize or 512, mode, flags or 0666, final or function() end)
+    local db = C.gdbm_open(name, blksize or 512, mode, flags or 0666, final or M.strerror)
     if db == nil then return nil, M.strerror() end
     return db
 end
@@ -131,11 +131,11 @@ function O:store(key, val, flag)
 end
 
 function O:insert(key, val)
-    return O:store(key, val, M.INSERT)
+    return self:store(key, val, M.INSERT)
 end
 
 function O:replace(key, val)
-    return O:store(key, val, M.REPLACE)
+    return self:store(key, val, M.REPLACE)
 end
 
 function O:fetch_raw(key)
@@ -187,13 +187,14 @@ function O:pairs()
     return iter, self
 end
 
+local soi = ffi.sizeof("int") -- might as well cache this bit of idiocy
+
+-- FIXME return a bool where appropriate
 function O:setopt(opt, val)
-    -- FIXME use an int* here if possible
-    local pval = ffi.cast("void*", val)
-    local out = C.gdbm_setopt(self, opt, pval, ffi.sizeof(pval))
-    -- FIXME return bools if appropriate
+    local pval = ffi.cast("int[1]", val)
+    local out = C.gdbm_setopt(self, opt, pval, soi)
     if out == -1 then return nil, M.strerror() end
-    return tonumber(pval)
+    return tonumber(pval[0])
 end
 
 function O:reorganize()

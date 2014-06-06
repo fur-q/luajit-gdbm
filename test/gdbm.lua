@@ -1,6 +1,6 @@
 local ffi  = require "ffi"
-local test = require "test.test"
-local gdbm = require "ffi.gdbm"
+local test = require "contrib.test"
+local gdbm = require "src.gdbm"
 
 local dbfile, keyname, valname, fakename = "/tmp/test.db", "test", "test", "nop"
 local db
@@ -22,9 +22,9 @@ test.ensure = function()
 end
 
 test.store = function()
-    assert(db:store(keyname, valname, gdbm.INSERT))
-    assert(not db:store(keyname, valname, gdbm.INSERT))
-    assert(db:store(keyname, valname, gdbm.REPLACE))
+    assert(db:insert(keyname, valname))
+    assert(not db:insert(keyname, valname))
+    assert(db:replace(keyname, valname))
 end
 
 test.fetch = function()
@@ -60,15 +60,25 @@ test.first_next = function()
     end
 end
 
+test.pairs = function()
+    for k, v in pairs(db) do
+        assert.match(v, valname .. "[1-5]")
+    end
+end
+
 test.sync = function()
-    db:sync()
+    db:sync() -- just test this doesn't segfault i guess
 end
 
 test.fdesc = function()
     assert(db:fdesc() > 0)
 end
 
---
+test.reorganize = function()
+    assert.equal(db:reorganize(), true)
+end
+
+-- FIXME setopt
 
 test.break_on_error = true
 test()
