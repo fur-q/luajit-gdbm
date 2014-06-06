@@ -119,9 +119,23 @@ O.close = function(db) return C.gdbm_close(db) end
 O.sync  = function(db) return C.gdbm_sync(db) end
 O.fdesc = function(db) return C.gdbm_fdesc(db) end
 
--- FIXME return values -1/1 mean different things; acknowledge this
+-- FIXME allow specifying key/val lengths
 function O:store(key, val, flag)
-    return C.gdbm_store(self, pushdatum(key), pushdatum(val), flag) == 0
+    local ok = C.gdbm_store(self, pushdatum(key), pushdatum(val), flag)
+    if ok == -1 then
+        return nil, "Database opened in read-only mode"
+    elseif ok == 1 then
+        return nil, "Attempt to insert duplicate key"
+    end
+    return true
+end
+
+function O:insert(key, val)
+    return O:store(key, val, M.INSERT)
+end
+
+function O:replace(key, val)
+    return O:store(key, val, M.REPLACE)
 end
 
 function O:fetch_raw(key)
@@ -132,11 +146,11 @@ function O:fetch(key)
     return popdatum(self:fetch_raw(key))
 end
 
-function O:first_raw(key)
+function O:first_raw()
     return C.gdbm_firstkey(self)
 end
 
-function O:first(key)
+function O:first()
     return popdatum(self:first_raw())
 end
 
@@ -154,6 +168,23 @@ end
 
 function O:exists(key)
     return C.gdbm_exists(self, pushdatum(key)) > 0
+end
+
+-- with apologies to lhf
+
+local iter = function(d, k)
+    local v
+    if k == nil then
+        k = d:first()
+    else
+        k = d:next(k)
+    end
+    local v = k and d:fetch(k) or nil
+    return k, v
+end
+
+function O:pairs()
+    return iter, self
 end
 
 function O:setopt(opt, val)
@@ -182,6 +213,6 @@ end
 --
 
 ffi.metatype("datum", { __tostring = popdatum })
-ffi.metatype("struct GDBM_DUMMY", { __index = O })
+ffi.metatype("struct GDBM_DUMMY", { __index = O, __pairs = O.pairs })
 
 return M
